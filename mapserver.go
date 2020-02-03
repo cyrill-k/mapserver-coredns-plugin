@@ -36,6 +36,8 @@ func (e Mapserver) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Ms
 	// Debug log that we've have seen the query. This will only be shown when the debug plugin is loaded.
 	log.Debug("Received response")
 
+	fmt.Printf("test: %+v", r)
+
 	// Wrap.
 	pw := NewResponsePrinter(w)
 
