@@ -5,24 +5,28 @@ package mapserver
 
 import (
 	"context"
+	"crypto"
 	"fmt"
-	"io"
-	"os"
+	"log"
+	"net/url"
+
+	"github.com/cyrill-k/trustflex/common"
+	"github.com/cyrill-k/trustflex/trillian/tclient"
 
 	"github.com/coredns/coredns/plugin"
-	"github.com/coredns/coredns/plugin/metrics"
-	clog "github.com/coredns/coredns/plugin/pkg/log"
+	//	clog "github.com/coredns/coredns/plugin/pkg/log"
+	"github.com/coredns/coredns/request"
 
 	"github.com/miekg/dns"
 )
 
-// Define log to be a logger with the plugin name in it. This way we can just use log.Info and
-// friends to log.
-var log = clog.NewWithPlugin("mapserver")
-
 // Mapserver is an example plugin to show how to write a plugin.
 type Mapserver struct {
-	Next plugin.Handler
+	Next            plugin.Handler
+	MapserverDomain string
+	MapID           int64
+	MapPK           crypto.PublicKey
+	MapAddress      url.URL
 }
 
 // ServeDNS implements the plugin.Handler interface. This method gets called when example is used
@@ -33,39 +37,76 @@ func (e Mapserver) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Ms
 	// Here we wrap the dns.ResponseWriter in a new ResponseWriter and call the next plugin, when the
 	// answer comes back, it will print "example".
 
-	// Debug log that we've have seen the query. This will only be shown when the debug plugin is loaded.
-	log.Debug("Received response")
+	request := request.Request{W: w, Req: r}
+	m, err := e.generateProofResponse(e.MapserverDomain, request)
+	if err != nil {
+		return 0, err
+	}
+	w.WriteMsg(m)
+	return 0, nil
+}
 
-	fmt.Printf("test: %+v", r)
+func (e Mapserver) retrieveProofsFromMapServer(domains []string) {
+	mapClient := tclient.NewMapClient(e.MapAddress.Hostname()+":"+e.MapAddress.Port(), common.LoadPK(e.MapPK).(crypto.PublicKey))
+	defer mapClient.Close()
 
-	// Wrap.
-	pw := NewResponsePrinter(w)
+	proofs, err := mapClient.GetProofForDomains(e.MapID, mapClient.GetMapPK(), domains)
+	common.LogError("Couldn't retrieve proofs for all domains: %s", err)
 
-	// Export metric with the server label set to the current server handling the request.
-	requestCount.WithLabelValues(metrics.WithServer(ctx)).Inc()
+	log.Print("Entries in map server...")
+	for i, proof := range proofs {
+		err := proof.Validate(e.MapID, mapClient.GetMapPK(), common.DefaultTreeNonce)
+		if err != nil {
+			log.Fatalf("Entry %d (%s): Validate failed: %s", i, proof.GetDomain(), err)
+		}
+		log.Printf("Entry %d (%s): %s", i, proof.GetDomain(), proof.ToString())
+	}
+}
 
-	// Call next plugin (if any).
-	return plugin.NextOrFailure(e.Name(), e.Next, ctx, pw, r)
+func (e Mapserver) generateProofResponse(domain string, r request.Request) (*dns.Msg, error) {
+	// get proof from map server using map_client
+	e.retrieveProofsFromMapServer([]string{domain})
+
+	var proof []byte
+	for i := 0; i < 256; i++ {
+		proof = append(proof, byte(i))
+	}
+
+	// encode proof into Txt records
+	proofStrings := bytesToStrings(proof)
+
+	// add Txt records to DNS response
+	setupEdns0Opt(r.Req)
+	m := new(dns.Msg)
+	m.SetReply(r.Req)
+
+	hdr := dns.RR_Header{Name: r.QName(), Rrtype: dns.TypeTXT, Class: dns.ClassINET, Ttl: 0}
+	m.Answer = append(m.Answer, &dns.TXT{Hdr: hdr, Txt: proofStrings})
+	//
+
+	return m, nil
+}
+
+func bytesToStrings(in []byte) []string {
+	var out []string
+	for i := range in {
+		if i%255 == 0 {
+			out = append(out, "")
+		}
+		out[len(out)-1] += fmt.Sprintf("\\%d%d%d", in[i]/100, in[i]/10%10, in[i]%10)
+	}
+	return out
 }
 
 // Name implements the Handler interface.
 func (e Mapserver) Name() string { return "mapserver" }
 
-// ResponsePrinter wrap a dns.ResponseWriter and will write example to standard output when WriteMsg is called.
-type ResponsePrinter struct {
-	dns.ResponseWriter
+// setupEdns0Opt will retrieve the EDNS0 OPT or create it if it does not exist.
+func setupEdns0Opt(r *dns.Msg) *dns.OPT {
+	o := r.IsEdns0()
+	if o == nil {
+		r.SetEdns0(4096, false)
+		o = r.IsEdns0()
+	}
+	return o
 }
-
-// NewResponsePrinter returns ResponseWriter.
-func NewResponsePrinter(w dns.ResponseWriter) *ResponsePrinter {
-	return &ResponsePrinter{ResponseWriter: w}
-}
-
-// WriteMsg calls the underlying ResponseWriter's WriteMsg method and prints "example" to standard output.
-func (r *ResponsePrinter) WriteMsg(res *dns.Msg) error {
-	fmt.Fprintln(out, "example")
-	return r.ResponseWriter.WriteMsg(res)
-}
-
-// Make out a reference to os.Stdout so we can easily overwrite it for testing.
-var out io.Writer = os.Stdout
