@@ -47,7 +47,7 @@ func (e Mapserver) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Ms
 }
 
 // Name implements the Handler interface.
-func (e Mapserver) Name() string { return "example" }
+func (e Mapserver) Name() string { return "mapserver" }
 
 // ResponsePrinter wrap a dns.ResponseWriter and will write example to standard output when WriteMsg is called.
 type ResponsePrinter struct {
