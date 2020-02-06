@@ -5,10 +5,10 @@ package mapserver
 
 import (
 	"context"
-	"crypto"
 	"fmt"
 	"log"
 	"net/url"
+	"strings"
 
 	"github.com/cyrill-k/trustflex/common"
 	"github.com/cyrill-k/trustflex/trillian/tclient"
@@ -25,7 +25,7 @@ type Mapserver struct {
 	Next            plugin.Handler
 	MapserverDomain string
 	MapID           int64
-	MapPK           crypto.PublicKey
+	MapPK           string
 	MapAddress      url.URL
 }
 
@@ -38,7 +38,12 @@ func (e Mapserver) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Ms
 	// answer comes back, it will print "example".
 
 	request := request.Request{W: w, Req: r}
-	m, err := e.generateProofResponse(e.MapserverDomain, request)
+	requestedDomain := strings.TrimSuffix(request.QName(), ".")
+	requestedDomain = strings.TrimSuffix(requestedDomain, e.MapserverDomain)
+	requestedDomain = strings.TrimSuffix(requestedDomain, ".")
+
+	log.Printf("ServeDNS(%s -> %s)", request.QName(), requestedDomain)
+	m, err := e.generateProofResponse(requestedDomain, request)
 	if err != nil {
 		return 0, err
 	}
@@ -46,67 +51,57 @@ func (e Mapserver) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Ms
 	return 0, nil
 }
 
-func (e Mapserver) retrieveProofsFromMapServer(domains []string) {
-	mapClient := tclient.NewMapClient(e.MapAddress.Hostname()+":"+e.MapAddress.Port(), common.LoadPK(e.MapPK).(crypto.PublicKey))
+func (e Mapserver) retrieveProofsFromMapServer(domains []string) ([]tclient.Proof, error) {
+	mapClient := tclient.NewMapClient(e.MapAddress.Hostname()+":"+e.MapAddress.Port(), e.MapPK)
 	defer mapClient.Close()
 
 	proofs, err := mapClient.GetProofForDomains(e.MapID, mapClient.GetMapPK(), domains)
-	common.LogError("Couldn't retrieve proofs for all domains: %s", err)
-
-	log.Print("Entries in map server...")
-	for i, proof := range proofs {
-		err := proof.Validate(e.MapID, mapClient.GetMapPK(), common.DefaultTreeNonce)
-		if err != nil {
-			log.Fatalf("Entry %d (%s): Validate failed: %s", i, proof.GetDomain(), err)
-		}
-		log.Printf("Entry %d (%s): %s", i, proof.GetDomain(), proof.ToString())
+	if err != nil {
+		return nil, fmt.Errorf("Couldn't retrieve proofs for all domains: %s", err)
 	}
+
+	log.Printf("Entries in map server...")
+	for i, proof := range proofs {
+		log.Printf("Entry (%s): %s", proof.GetDomain(), proof.ToString())
+		err = proof.Validate(e.MapID, mapClient.GetMapPK(), common.DefaultTreeNonce, domains[i])
+		if err != nil {
+			return nil, fmt.Errorf("Entry %d (%s): Validate failed: %s", i, proof.GetDomain(), err)
+		}
+	}
+	return proofs, nil
 }
 
 func (e Mapserver) generateProofResponse(domain string, r request.Request) (*dns.Msg, error) {
 	// get proof from map server using map_client
-	e.retrieveProofsFromMapServer([]string{domain})
-
-	var proof []byte
-	for i := 0; i < 256; i++ {
-		proof = append(proof, byte(i))
+	proofs, err := e.retrieveProofsFromMapServer([]string{domain})
+	if err != nil {
+		return nil, err
 	}
+	if len(proofs) == 0 {
+		return nil, fmt.Errorf("Empty proof returned")
+	}
+	proof := proofs[0]
+	log.Printf("Entry (%s): %s", proof.GetDomain(), proof.ToString())
+
+	proofBytes, err := proof.MarshalBinary()
 
 	// encode proof into Txt records
-	proofStrings := bytesToStrings(proof)
+	proofStrings := common.BytesToStrings(proofBytes)
 
+	log.Printf("r.size = %+v", r.Size())
 	// add Txt records to DNS response
-	setupEdns0Opt(r.Req)
+	// common.SetupEdns0Opt(r.Req, 4002)
 	m := new(dns.Msg)
 	m.SetReply(r.Req)
+	// common.SetupEdns0Opt(m, 4003)
 
 	hdr := dns.RR_Header{Name: r.QName(), Rrtype: dns.TypeTXT, Class: dns.ClassINET, Ttl: 0}
 	m.Answer = append(m.Answer, &dns.TXT{Hdr: hdr, Txt: proofStrings})
 	//
+	// log.Printf("resp = %+v", m)
 
 	return m, nil
 }
 
-func bytesToStrings(in []byte) []string {
-	var out []string
-	for i := range in {
-		if i%255 == 0 {
-			out = append(out, "")
-		}
-		out[len(out)-1] += fmt.Sprintf("\\%d%d%d", in[i]/100, in[i]/10%10, in[i]%10)
-	}
-	return out
-}
-
 // Name implements the Handler interface.
 func (e Mapserver) Name() string { return "mapserver" }
-
-// setupEdns0Opt will retrieve the EDNS0 OPT or create it if it does not exist.
-func setupEdns0Opt(r *dns.Msg) *dns.OPT {
-	o := r.IsEdns0()
-	if o == nil {
-		r.SetEdns0(4096, false)
-		o = r.IsEdns0()
-	}
-	return o
-}

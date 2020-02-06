@@ -1,16 +1,13 @@
 package mapserver
 
 import (
-	"crypto"
 	"fmt"
 	"github.com/coredns/coredns/core/dnsserver"
 	"github.com/coredns/coredns/plugin"
-	"net"
+	"io/ioutil"
 	"net/url"
 	"strconv"
 	"strings"
-
-	"github.com/cyrill-k/trustflex/common"
 
 	"github.com/caddyserver/caddy"
 )
@@ -24,22 +21,29 @@ func setup(c *caddy.Controller) error {
 	c.Next() // Ignore "example" and give us the next token.
 	args := c.RemainingArgs()
 	var mapID int64
-	var mapPK crypto.PublicKey
-	var mapAddress url.URL
+	var mapPK string
+	var mapAddress *url.URL
 	if len(args) == 3 {
-		var err error
-		mapID, err = int64(strconv.Atoi(args[0]))
+		fmt.Printf("len = 3")
+		dat, err := ioutil.ReadFile(args[0])
 		if err != nil {
 			return plugin.Error("mapserver", c.ArgErr())
 		}
-		mapPK, err = common.LoadPK(args[1])
+		mapIDString := strings.TrimSuffix(string(dat), "\n")
+		fmt.Printf("read file: content='%s'", mapIDString)
+		mapIDInt, err := strconv.Atoi(mapIDString)
+		fmt.Printf("error = %s", err)
 		if err != nil {
 			return plugin.Error("mapserver", c.ArgErr())
 		}
-		&mapAddress, err = url.Parse(args[2])
+		fmt.Printf("parsed int")
+		mapID = int64(mapIDInt)
+		mapPK = args[1]
+		mapAddress, err = url.Parse(args[2])
 		if err != nil {
 			return plugin.Error("mapserver", c.ArgErr())
 		}
+		fmt.Printf("parsed url")
 	} else {
 		return plugin.Error("mapserver", c.ArgErr())
 	}
@@ -52,7 +56,7 @@ func setup(c *caddy.Controller) error {
 
 	// Add the Plugin to CoreDNS, so Servers can use it in their plugin chain.
 	dnsserver.GetConfig(c).AddPlugin(func(next plugin.Handler) plugin.Handler {
-		return Mapserver{Next: next, MapserverDomain: strings.TrimSuffix(u.Hostname(), "."), MapID: mapID, MapPK: mapPK, MapAddress: mapAddress}
+		return Mapserver{Next: next, MapserverDomain: strings.TrimSuffix(u.Hostname(), "."), MapID: mapID, MapPK: mapPK, MapAddress: *mapAddress}
 	})
 
 	// All OK, return a nil error.
