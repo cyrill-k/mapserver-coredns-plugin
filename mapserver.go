@@ -42,11 +42,13 @@ func (e Mapserver) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Ms
 	requestedDomain = strings.TrimSuffix(requestedDomain, e.MapserverDomain)
 	requestedDomain = strings.TrimSuffix(requestedDomain, ".")
 
-	log.Printf("ServeDNS(%s -> %s)", request.QName(), requestedDomain)
+	log.Printf("Received DNS request (%s) from %s:%s", request.QName(), request.IP(), request.Port())
 	m, err := e.generateProofResponse(requestedDomain, request)
 	if err != nil {
+		log.Printf("Failed to generate proof response: %s", err)
 		return 0, err
 	}
+	log.Printf("Sending reply to %s:%s", request.IP(), request.Port())
 	w.WriteMsg(m)
 	return 0, nil
 }
@@ -60,13 +62,13 @@ func (e Mapserver) retrieveProofsFromMapServer(domains []string) ([]tclient.Proo
 		return nil, fmt.Errorf("Couldn't retrieve proofs for all domains: %s", err)
 	}
 
-	log.Printf("Entries in map server...")
 	for i, proof := range proofs {
-		log.Printf("Entry (%s): %s", proof.GetDomain(), proof.ToString())
+		log.Printf("Validating %s ...", proof.ToString())
 		err = proof.Validate(e.MapID, mapClient.GetMapPK(), common.DefaultTreeNonce, domains[i])
 		if err != nil {
 			return nil, fmt.Errorf("Entry %d (%s): Validate failed: %s", i, proof.GetDomain(), err)
 		}
+		log.Print("Validation succeeded")
 	}
 	return proofs, nil
 }
@@ -81,24 +83,18 @@ func (e Mapserver) generateProofResponse(domain string, r request.Request) (*dns
 		return nil, fmt.Errorf("Empty proof returned")
 	}
 	proof := proofs[0]
-	log.Printf("Entry (%s): %s", proof.GetDomain(), proof.ToString())
 
 	proofBytes, err := proof.MarshalBinary()
 
 	// encode proof into Txt records
 	proofStrings := common.BytesToStrings(proofBytes)
 
-	log.Printf("r.size = %+v", r.Size())
 	// add Txt records to DNS response
-	// common.SetupEdns0Opt(r.Req, 4002)
 	m := new(dns.Msg)
 	m.SetReply(r.Req)
-	// common.SetupEdns0Opt(m, 4003)
 
 	hdr := dns.RR_Header{Name: r.QName(), Rrtype: dns.TypeTXT, Class: dns.ClassINET, Ttl: 0}
 	m.Answer = append(m.Answer, &dns.TXT{Hdr: hdr, Txt: proofStrings})
-	//
-	// log.Printf("resp = %+v", m)
 
 	return m, nil
 }

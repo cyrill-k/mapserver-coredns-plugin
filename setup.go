@@ -24,26 +24,21 @@ func setup(c *caddy.Controller) error {
 	var mapPK string
 	var mapAddress *url.URL
 	if len(args) == 3 {
-		fmt.Printf("len = 3")
 		dat, err := ioutil.ReadFile(args[0])
 		if err != nil {
 			return plugin.Error("mapserver", c.ArgErr())
 		}
 		mapIDString := strings.TrimSuffix(string(dat), "\n")
-		fmt.Printf("read file: content='%s'", mapIDString)
 		mapIDInt, err := strconv.Atoi(mapIDString)
-		fmt.Printf("error = %s", err)
 		if err != nil {
 			return plugin.Error("mapserver", c.ArgErr())
 		}
-		fmt.Printf("parsed int")
 		mapID = int64(mapIDInt)
 		mapPK = args[1]
 		mapAddress, err = url.Parse(args[2])
 		if err != nil {
 			return plugin.Error("mapserver", c.ArgErr())
 		}
-		fmt.Printf("parsed url")
 	} else {
 		return plugin.Error("mapserver", c.ArgErr())
 	}
@@ -52,7 +47,7 @@ func setup(c *caddy.Controller) error {
 	if err != nil {
 		fmt.Printf("Error parsing '%s': %s", c.Key, u.Hostname())
 	}
-	fmt.Printf("setup(c.Key = '%+v', hostname='%s')", c.Key, strings.TrimSuffix(u.Hostname(), "."))
+	fmt.Printf("setup mapserver at %s", strings.TrimSuffix(u.Hostname(), "."))
 
 	// Add the Plugin to CoreDNS, so Servers can use it in their plugin chain.
 	dnsserver.GetConfig(c).AddPlugin(func(next plugin.Handler) plugin.Handler {
