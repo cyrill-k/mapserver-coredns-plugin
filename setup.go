@@ -47,7 +47,7 @@ func setup(c *caddy.Controller) error {
 	if err != nil {
 		fmt.Printf("Error parsing '%s': %s", c.Key, u.Hostname())
 	}
-	fmt.Printf("setup mapserver at %s", strings.TrimSuffix(u.Hostname(), "."))
+	fmt.Printf("setup mapserver at %s\n", strings.TrimSuffix(u.Hostname(), "."))
 
 	// Add the Plugin to CoreDNS, so Servers can use it in their plugin chain.
 	dnsserver.GetConfig(c).AddPlugin(func(next plugin.Handler) plugin.Handler {

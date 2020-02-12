@@ -93,8 +93,11 @@ func (e Mapserver) generateProofResponse(domain string, r request.Request) (*dns
 	m := new(dns.Msg)
 	m.SetReply(r.Req)
 
-	hdr := dns.RR_Header{Name: r.QName(), Rrtype: dns.TypeTXT, Class: dns.ClassINET, Ttl: 0}
-	m.Answer = append(m.Answer, &dns.TXT{Hdr: hdr, Txt: proofStrings})
+	// ahdr := dns.RR_Header{Name: r.QName(), Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: 0}
+	// m.Answer = append(m.Answer, &dns.A{Hdr: ahdr, A: net.ParseIP("0.0.0.0")})
+
+	txthdr := dns.RR_Header{Name: r.QName(), Rrtype: dns.TypeTXT, Class: dns.ClassINET, Ttl: 0}
+	m.Answer = append(m.Answer, &dns.TXT{Hdr: txthdr, Txt: proofStrings})
 
 	return m, nil
 }
