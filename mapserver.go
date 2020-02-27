@@ -22,11 +22,12 @@ import (
 
 // Mapserver is an example plugin to show how to write a plugin.
 type Mapserver struct {
-	Next            plugin.Handler
-	MapserverDomain string
-	MapID           int64
-	MapPK           string
-	MapAddress      url.URL
+	Next                  plugin.Handler
+	MapserverDomain       string
+	MapID                 int64
+	MapPK                 string
+	MapAddress            url.URL
+	MaxReceiveMessageSize int
 }
 
 // ServeDNS implements the plugin.Handler interface. This method gets called when example is used
@@ -54,7 +55,7 @@ func (e Mapserver) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Ms
 }
 
 func (e Mapserver) retrieveProofsFromMapServer(domains []string) ([]tclient.Proof, error) {
-	mapClient := tclient.NewMapClient(e.MapAddress.Hostname()+":"+e.MapAddress.Port(), e.MapPK)
+	mapClient := tclient.NewMapClient(e.MapAddress.Hostname()+":"+e.MapAddress.Port(), e.MapPK, e.MaxReceiveMessageSize)
 	defer mapClient.Close()
 
 	proofs, err := mapClient.GetProofForDomains(e.MapID, mapClient.GetMapPK(), domains)

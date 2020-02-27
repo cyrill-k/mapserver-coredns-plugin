@@ -23,7 +23,8 @@ func setup(c *caddy.Controller) error {
 	var mapID int64
 	var mapPK string
 	var mapAddress *url.URL
-	if len(args) == 3 {
+	var maxReceiveMessageSize int
+	if len(args) == 4 {
 		dat, err := ioutil.ReadFile(args[0])
 		if err != nil {
 			return plugin.Error("mapserver", c.ArgErr())
@@ -39,6 +40,10 @@ func setup(c *caddy.Controller) error {
 		if err != nil {
 			return plugin.Error("mapserver", c.ArgErr())
 		}
+		maxReceiveMessageSize, err = strconv.Atoi(args[3])
+		if err != nil {
+			return plugin.Error("mapserver", c.ArgErr())
+		}
 	} else {
 		return plugin.Error("mapserver", c.ArgErr())
 	}
@@ -51,7 +56,7 @@ func setup(c *caddy.Controller) error {
 
 	// Add the Plugin to CoreDNS, so Servers can use it in their plugin chain.
 	dnsserver.GetConfig(c).AddPlugin(func(next plugin.Handler) plugin.Handler {
-		return Mapserver{Next: next, MapserverDomain: strings.TrimSuffix(u.Hostname(), "."), MapID: mapID, MapPK: mapPK, MapAddress: *mapAddress}
+		return Mapserver{Next: next, MapserverDomain: strings.TrimSuffix(u.Hostname(), "."), MapID: mapID, MapPK: mapPK, MapAddress: *mapAddress, MaxReceiveMessageSize: maxReceiveMessageSize}
 	})
 
 	// All OK, return a nil error.
