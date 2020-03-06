@@ -49,7 +49,7 @@ func (e Mapserver) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Ms
 		log.Printf("Failed to generate proof response: %s", err)
 		return 0, err
 	}
-	log.Printf("Sending reply to %s:%s", request.IP(), request.Port())
+	log.Printf("Sending reply with size %d to %s:%s", m.Len(), request.IP(), request.Port())
 	w.WriteMsg(m)
 	return 0, nil
 }
@@ -84,8 +84,10 @@ func (e Mapserver) generateProofResponse(domain string, r request.Request) (*dns
 		return nil, fmt.Errorf("Empty proof returned")
 	}
 	proof := proofs[0]
+	proof.SetEnableCompression(true)
 
 	proofBytes, err := proof.MarshalBinary()
+	log.Printf("Proof size = %d bytes", len(proofBytes))
 
 	// encode proof into Txt records
 	proofStrings := common.BytesToStrings(proofBytes)
@@ -97,7 +99,7 @@ func (e Mapserver) generateProofResponse(domain string, r request.Request) (*dns
 	// ahdr := dns.RR_Header{Name: r.QName(), Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: 0}
 	// m.Answer = append(m.Answer, &dns.A{Hdr: ahdr, A: net.ParseIP("0.0.0.0")})
 
-	txthdr := dns.RR_Header{Name: r.QName(), Rrtype: dns.TypeTXT, Class: dns.ClassINET, Ttl: 0}
+	txthdr := dns.RR_Header{Name: r.QName(), Rrtype: dns.TypeTXT, Class: dns.ClassINET, Ttl: 3600}
 	m.Answer = append(m.Answer, &dns.TXT{Hdr: txthdr, Txt: proofStrings})
 
 	return m, nil
