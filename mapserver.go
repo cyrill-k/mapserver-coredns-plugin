@@ -10,8 +10,8 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/cyrill-k/trustflex/common"
-	"github.com/cyrill-k/trustflex/trillian/tclient"
+	"github.com/cyrill-k/fpki/common"
+	"github.com/cyrill-k/fpki/trillian/tclient"
 
 	"github.com/coredns/coredns/plugin"
 	//	clog "github.com/coredns/coredns/plugin/pkg/log"
