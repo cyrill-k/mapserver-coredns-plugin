@@ -1,12 +1,12 @@
-# F-PKI Map Server Plugin
+# Trustflex Map Server Plugin
 
 ## Map Server Plugin
 
-Fetch F-PKI map server proof bytes via DNS
+Fetch Trustflex map server proof bytes via DNS
 
 ## Description
 
-This plugin enables the DNS resolver to return F-PKI map server proof bytes via DNS responses in TXT resource records.
+This plugin enables the DNS resolver to return Trustflex map server proof bytes via DNS responses in TXT resource records.
 
 The configuration looks as follows:
 
