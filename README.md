@@ -6,7 +6,7 @@ Fetch F-PKI map server proof bytes via DNS
 
 ## Description
 
-This plugin enables the DNS resolver to return F-PKI map server proof bytes via DNS responses in a TXT resource record.
+This plugin enables the DNS resolver to return F-PKI map server proof bytes via DNS responses in TXT resource records.
 
 The configuration looks as follows:
 
@@ -43,8 +43,8 @@ make
 
 ## Examples
 
-In this configuration, we forward all queries to 9.9.9.9 and print "example" whenever we receive
-a query.
+In this configuration, we have a map server `mapserver1.com` which serves proof bytes on port `12345`.
+The map server runs locally on port 8094 and accepts grpc messages of size `1073741824`.
 
 ~~~ corefile
 mapserver1.com:12345 {
