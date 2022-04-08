@@ -1,13 +1,20 @@
-# example
+# F-PKI Map Server Plugin
 
-## Name
+## Map Server Plugin
 
-*example* - prints "example" on every query handled.
+Fetch F-PKI map server proof bytes via DNS
 
 ## Description
 
-The example plugin prints "example" on every query that go handled by the server. It serves as
-documentation for writing CoreDNS plugins.
+This plugin enables the DNS resolver to return F-PKI map server proof bytes via DNS responses in a TXT resource record.
+
+The configuration looks as follows:
+
+~~~ corefile
+mapserver-domain {
+  mapserver path-to-mapserver-id path-to-mapserver-public-key mapserver-grpc-address max-receive-message-size
+}
+~~~
 
 ## Compilation
 
@@ -34,36 +41,13 @@ Or you can instead use make:
 make
 ```
 
-## Syntax
-
-~~~ txt
-example
-~~~
-
-## Metrics
-
-If monitoring is enabled (via the *prometheus* directive) the following metric is exported:
-
-* `coredns_example_request_count_total{server}` - query count to the *example* plugin.
-
-The `server` label indicated which server handled the request, see the *metrics* plugin for details.
-
-## Ready
-
-This plugin reports readiness to the ready plugin. It will be immediately ready.
-
 ## Examples
 
 In this configuration, we forward all queries to 9.9.9.9 and print "example" whenever we receive
 a query.
 
 ~~~ corefile
-. {
-  forward . 9.9.9.9
-  example
+mapserver1.com:12345 {
+  mapserver /path/to/mapid1 /path/to/mappk1.pem grpc://localhost:8094 1073741824
 }
 ~~~
-
-## Also See
-
-See the [manual](https://coredns.io/manual).
